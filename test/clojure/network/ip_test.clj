@@ -84,7 +84,11 @@
 (deftest test-ipv6-network-sequence
   (testing "long form IPv6 parses"
     (is (= "1000:0:0:0:0:0:0:0"
-           (str (first (ip/make-network "1000:0000:0000:0000:0000:0000:0000:0000/128"))))))
+           (str (first (ip/make-network "1000:0000:0000:0000:0000:0000:0000:0000/128")))))
+    (is (= "1000:0:0:0:0:0:0:0"
+           (str (first (seq (ip/make-network "1000:0000:0000:0000:0000:0000:0000:0000/128")))))))
   (testing "Leading zero"
     (is (= "0:0:0:0:0:0:0:0"
-           (str (first (ip/make-network "0000:0000:0000:0000:0000:0000:0000:0000/128")))))))
+           (str (first (ip/make-network "0000:0000:0000:0000:0000:0000:0000:0000/128")))))
+    (is (= "0:0:0:0:0:0:0:0"
+           (str (first (seq (ip/make-network "0000:0000:0000:0000:0000:0000:0000:0000/128"))))))))

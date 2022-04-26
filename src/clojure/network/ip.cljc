@@ -4,6 +4,7 @@
   #?(:clj
       (:import
         [java.math BigInteger]
+        [java.nio ByteBuffer]
         [clojure.lang ISeq Counted IPersistentSet]
         [java.net InetAddress Inet4Address Inet6Address]
         [java.lang UnsupportedOperationException])
@@ -12,7 +13,8 @@
                [goog.math.Integer :as i])))
 
 (defprotocol IPConstructor
-  (make-ip-address [this]))
+  (make-ip-address [this])
+  (make-ip-address-version [this version]))
 
 (defprotocol IPInfo
   (ip-address [this])
@@ -22,6 +24,24 @@
 (defprotocol NetworkInfo
   (network-mask [this]))
 
+#?(:clj
+   (defn- pad-left
+     [buf n]
+     (let [length (count buf)]
+       (case length
+         n buf
+         (let [byte-buf (ByteBuffer/allocate n)]
+           (dotimes [n (- n length)]
+             (.put byte-buf (byte 0)))
+           (.put byte-buf buf)
+           (.array byte-buf))))))
+
+#?(:clj
+   (defn- pad-ip-version
+     [buf version]
+     (case version 
+       4 (pad-left buf 4)
+       6 (pad-left buf 16))))
 
 #?(:cljs
     (defn- bits->ip [bits]
@@ -80,7 +100,10 @@
     (extend-type BigInteger
         IPConstructor
         (make-ip-address [this]
-          (->IPAddress (.toByteArray this))))
+          (->IPAddress (.toByteArray this)))
+
+        (make-ip-address-version [this version]
+          (->IPAddress (pad-ip-version (.toByteArray this) version))))
    :cljs
     (extend-type goog.math.Integer
       IPConstructor
@@ -91,7 +114,10 @@
     (extend-type clojure.lang.BigInt
       IPConstructor
       (make-ip-address [this]
-        (->IPAddress (.toByteArray (biginteger this)))))
+        (->IPAddress (.toByteArray (biginteger this))))
+      (make-ip-address-version [this version]
+        (->IPAddress (pad-ip-version (.toByteArray (biginteger this))
+                                     version))))
    :cljs
     (extend-type number
       IPConstructor
@@ -106,15 +132,17 @@
 
 
 (defn- get-network-address [ip subnet]
-  (let [ip (make-ip-address ip)]
-    (make-ip-address
+  (let [ip (make-ip-address ip)
+        ip-version (version ip)]
+    (make-ip-address-version
       (reduce
         #?(:clj (fn [n bit] (.clearBit n bit))
                 :cljs (fn [n bit] (bit-clear n bit)))
         (numeric-value ip)
-        (case (version ip)
+        (case ip-version
           4 (range (clojure.core/- 32 subnet))
-          6 (range (clojure.core/- 128 subnet)))))))
+          6 (range (clojure.core/- 128 subnet))))
+     ip-version)))
 
 (defn- get-broadcast-address [ip subnet]
   (let [ip (make-ip-address ip)]
@@ -128,13 +156,12 @@
           6 (range (clojure.core/- 128 subnet)))))))
 
 
-(defn- get-all-addresses [ip subnet]
+(defn- get-all-addresses [ip subnet version]
   (let [min-address (numeric-value (get-network-address ip subnet))
         max-address #?(:clj
                         (.add (numeric-value (get-broadcast-address ip subnet)) BigInteger/ONE)
                        :cljs (inc (numeric-value (get-broadcast-address ip subnet))))]
-    (map make-ip-address (range min-address max-address))))
-
+    (map #(make-ip-address-version % version) (range min-address max-address))))
 
 (deftype Network [ip mask]
   IPInfo
@@ -146,8 +173,8 @@
   #?@(:clj
        [ISeq
         (first [this] (get-network-address ip mask))
-        (next [this] (next (get-all-addresses ip mask)))
-        (more [this] (rest (get-all-addresses ip mask)))
+        (next [this] (next (get-all-addresses ip mask (version this))))
+        (more [this] (rest (get-all-addresses ip mask (version this))))
         (count [this]
                (let [min-value (numeric-value (get-network-address ip mask))
                      max-value (numeric-value (get-broadcast-address ip mask))]
@@ -158,7 +185,7 @@
                  ;; BIG FAIL for... clojure
                  (inc (.subtract max-value min-value))))
         clojure.lang.Seqable
-        (seq [this] (get-all-addresses ip mask))
+        (seq [this] (get-all-addresses ip mask (version this)))
         clojure.lang.IPersistentSet
         (disjoin [this _] (throw (Exception. "Network can't disjoin IP Addresses.")))
         (contains [this test-address]
@@ -193,9 +220,9 @@
        :cljs
        [cljs.core/ISeq
         (-first [this] (get-network-address ip mask))
-        (-rest [this] (rest (get-all-addresses ip mask)))
+        (-rest [this] (rest (get-all-addresses ip mask (version this))))
         cljs.core/ISeqable
-        (-seq [this] (get-all-addresses ip mask))
+        (-seq [this] (get-all-addresses ip mask (version this)))
         cljs.core/ILookup
         (-lookup [this target-ip]
                  (-lookup this target-ip nil))
