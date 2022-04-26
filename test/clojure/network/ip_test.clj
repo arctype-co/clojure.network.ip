@@ -45,17 +45,33 @@
 (deftest test-parse-ipv6-address
   (testing "long form IPv6 parses"
     (is (= 6 (ip/version (ip/make-ip-address "1000:0000:0000:0000:0000:0000:0000:0000"))))
-    (is (= 6 (ip/version (ip/make-ip-address "0000:0000:0000:0000:0000:0000:0000:0000"))))))
+    (is (= 6 (ip/version (ip/make-ip-address "0000:0000:0000:0000:0000:0000:0000:0000")))))
+  (testing "short form IPv6 parses"
+    (is (= 6 (ip/version (ip/make-ip-address "1:0:0:0:0:0:0:0"))))
+    (is (= 6 (ip/version (ip/make-ip-address "0:0:0:0:0:0:0:0")))))
+  (testing "compressed form IPv6 parses"
+    (is (= 6 (ip/version (ip/make-ip-address "1::0"))))
+    (is (= 6 (ip/version (ip/make-ip-address "1:1::1"))))
+    (is (= 6 (ip/version (ip/make-ip-address "0::0"))))
+    (is (= 6 (ip/version (ip/make-ip-address "1::"))))
+    (is (= 6 (ip/version (ip/make-ip-address "::1"))))
+    (is (= 6 (ip/version (ip/make-ip-address "::0"))))
+    (is (= 6 (ip/version (ip/make-ip-address "::")))))
+  )
 
 (deftest test-parse-ip-network
   (testing "simple IP network parses"
     (is (= 4 (ip/version (ip/make-network "1.1.1.1/32"))))
     (is (= 4 (ip/version (ip/make-network "0.0.0.0/32"))))))
 
-(deftest test-parse-ipv6-address
+(deftest test-parse-ipv6-network
   (testing "long form IPv6 parses"
     (is (= 6 (ip/version (ip/make-network "1000:0000:0000:0000:0000:0000:0000:0000/128"))))
-    (is (= 6 (ip/version (ip/make-network "0000:0000:0000:0000:0000:0000:0000:0000/128"))))))
+    (is (= 6 (ip/version (ip/make-network "0000:0000:0000:0000:0000:0000:0000:0000/128"))))
+    (is (= 6 (ip/version (ip/make-network "1:1::1/128"))))
+    (is (= 6 (ip/version (ip/make-network "1:1:1:1::0/64"))))
+    (is (= 6 (ip/version (ip/make-network "::0/112"))))
+    (is (= 6 (ip/version (ip/make-network "::/0"))))))
 
 (deftest test-ip-string
   (testing "simple IP address"
@@ -90,5 +106,7 @@
   (testing "Leading zero"
     (is (= "0:0:0:0:0:0:0:0"
            (str (first (ip/make-network "0000:0000:0000:0000:0000:0000:0000:0000/128")))))
+    (is (= "0:0:0:0:0:0:0:0"
+           (str (first (ip/make-network "::/128")))))
     (is (= "0:0:0:0:0:0:0:0"
            (str (first (seq (ip/make-network "0000:0000:0000:0000:0000:0000:0000:0000/128"))))))))
